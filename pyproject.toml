@@ -1,0 +1,20 @@
+[project]
+name = "ergo"
+version = "0.1.0"
+description = "Evidential Rollback and Gap-triggered retrieval for diffusion language models"
+requires-python = ">=3.10"
+dependencies = ["numpy>=1.26", "pyyaml>=6.0", "chromadb>=0.5", "rank_bm25>=0.2.2"]
+
+[project.optional-dependencies]
+gpu = ["torch>=2.3", "transformers>=4.46", "accelerate>=0.34",
+       "sentence-transformers>=3.0", "datasets>=3.0"]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["ergo*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

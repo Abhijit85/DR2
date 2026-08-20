@@ -1,0 +1,25 @@
+# ERGO defaults — mirrors design doc §10. Contribution knobs are error rates.
+rollback:
+  alpha_roll: 0.135        # delta = ln(1/alpha_roll) = 2.0 nats
+  cap_fraction: 0.30
+  temperature: 1.0
+trigger:
+  alpha_fire: 0.05
+  lambda_g: 1.5            # fallback rule only
+  use_conformal: true
+loop:
+  n_parallel: 4
+  c_max: 4
+  total_steps: 128
+  tau_rel: 0.65
+  tau_done: 0.85
+  salient_words: 8
+retrieval:
+  alpha: 0.4
+  beta: 0.6
+  k: 3
+  mmr_lambda: 0.7
+  evidence_token_budget: 2400
+  relevance_floor: 0.35
+  chunk_chars: 2000
+  chunk_overlap_chars: 200
