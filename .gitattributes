@@ -1,0 +1,6 @@
+artifacts/** filter=lfs diff=lfs merge=lfs -text
+calibration/** filter=lfs diff=lfs merge=lfs -text
+data/** filter=lfs diff=lfs merge=lfs -text
+datasets/** filter=lfs diff=lfs merge=lfs -text
+results/** filter=lfs diff=lfs merge=lfs -text
+stores/** filter=lfs diff=lfs merge=lfs -text

@@ -1,0 +1,17 @@
+canvas:
+  len_thought: 48
+  len_action: 6
+  len_action_input: 16
+  len_observation: 48
+  len_critique: 24
+  len_answer: 96
+rollback:
+  cap_fraction: 0.0
+trigger:
+  use_conformal: false
+  lambda_g: 1000000.0
+loop:
+  total_steps: 48
+  c_max: 3
+  n_parallel: 2
+  control_sweeps: 4

@@ -1,0 +1,34 @@
+canvas:
+  len_thought: 96
+  len_action: 6
+  len_action_input: 24
+  len_observation: 64
+  len_critique: 32
+  len_answer: 48
+loop:
+  n_parallel: 1
+  beam_keep: 1
+  c_max: 4
+  total_steps: 64
+  closure_steps: 32
+  control_sweeps: 4
+  tau_rel: 0.65
+  tau_done: 0.85
+  salient_words: 8
+  rsd_tighten: 0.05
+  degenerate_repeat_frac: 0.7
+  degenerate_min_answer_tokens: 12
+  degenerate_min_cycles: 2
+retrieval:
+  alpha: 0.4
+  beta: 0.6
+  k: 3
+  candidates_multiplier: 4
+  mmr_lambda: 0.7
+  evidence_token_budget: 2400
+  relevance_floor: 0.35
+  chunk_chars: 2000
+  chunk_overlap_chars: 200
+  bm25: false
+rollback:
+  enabled: false

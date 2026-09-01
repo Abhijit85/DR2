@@ -12,7 +12,7 @@ import numpy as np
 
 from ..canvas import Action, Canvas
 from ..tokenization import SimpleTokenizer
-from .base import DenoiseResult, Snapshot, linear_step_budget, spread_select
+from .base import DenoiseResult, Snapshot, cap_select, linear_step_budget, spread_select
 
 _FILLER = "unknown"
 
@@ -26,12 +26,14 @@ class MockBackbone:
         known_conf: float = 0.95,
         unknown_conf: float = 0.30,
         answer_steps: int = 32,   # steps to fully demask the answer region
+        parallel_commit_threshold: float = 0.9,
     ) -> None:
         self.tok = tok
         self.facts = facts        # {evidence-substring: answer text}
         self.known_conf = known_conf
         self.unknown_conf = unknown_conf
         self.answer_steps = answer_steps
+        self.parallel_commit_threshold = parallel_commit_threshold
 
     # ------------------------------------------------------------------ world
     def _lookup(self, context: str) -> str | None:
@@ -110,7 +112,9 @@ class MockBackbone:
                         break
                     k = linear_step_budget(masked, self.answer_steps)
                     probs = self._prob_matrix(cv, target, conf)
-                    take = spread_select(cv, probs, rel, k, restrict=("answer",), rng=rng)
+                    take = cap_select(cv, probs, rel, k,
+                                      tau=self.parallel_commit_threshold,
+                                      restrict=("answer",), rng=rng)
                     cv.commit(take, target[take], conf[take])
             result.trajectories.append(self._snapshot(cv, target, conf, rel))
         return result

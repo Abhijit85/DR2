@@ -25,9 +25,10 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--query", required=True)
     ap.add_argument("--store", default="./ergo_store")
-    ap.add_argument("--backbone", choices=["mock", "llada", "dream"], default="dream")
+    ap.add_argument("--backbone", choices=["mock", "llada", "dream", "dream_native", "sardi_dream"], default="dream")
     ap.add_argument("--config", default=None)
     ap.add_argument("--device", default="cuda")
+    ap.add_argument("--adapter", default=None)
     ap.add_argument("--mock-doc", action="append", default=[])
     ap.add_argument("--mock-fact", action="append", default=[])
     args = ap.parse_args()
@@ -51,9 +52,15 @@ def main():
         cfg.canvas.len_observation, cfg.canvas.len_critique = 24, 12
         cfg.canvas.len_action_input = 8
     else:
-        from ergo.backbones import load_dream, load_llada
-        backbone = (load_dream(device=args.device) if args.backbone == "dream"
-                    else load_llada(device=args.device))
+        from ergo.backbones import load_dream, load_dream_native, load_llada, load_sardi_dream
+        if args.backbone == "dream":
+            backbone = load_dream(device=args.device, adapter_path=args.adapter)
+        elif args.backbone == "dream_native":
+            backbone = load_dream_native(device=args.device, adapter_path=args.adapter)
+        elif args.backbone == "sardi_dream":
+            backbone = load_sardi_dream(device=args.device, adapter_path=args.adapter)
+        else:
+            backbone = load_llada(device=args.device, adapter_path=args.adapter)
         tok = backbone.tok
         from ergo.rag import SentenceTransformerEmbedder
         embedder = SentenceTransformerEmbedder(device=None)

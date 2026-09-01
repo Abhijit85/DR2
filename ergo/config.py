@@ -10,7 +10,6 @@ from __future__ import annotations
 import math
 from dataclasses import dataclass, field, asdict
 from pathlib import Path
-from typing import Optional
 
 import yaml
 
@@ -31,13 +30,14 @@ class TriggerConfig:
     alpha_fire: float = 0.05        # conformal false-fire rate (primary rule)
     lambda_g: float = 1.5           # mu + lambda*sigma fallback rule
     max_focus_words: int = 6
-    min_span_tokens: int = 3
+    min_span_tokens: int = 2
     use_conformal: bool = True      # falls back automatically if no calibration set
 
 
 @dataclass
 class RollbackConfig:
     """C1 — evidential rollback."""
+    enabled: bool = True
     alpha_roll: float = 0.135       # target false-rollback rate; delta = ln(1/alpha)
     cap_fraction: float = 0.30      # max fraction of anchors cleared per cycle
     temperature: float = 1.0        # optional temperature scaling of p_theta
@@ -76,10 +76,16 @@ class LoopConfig:
     beam_keep: int = 1
     c_max: int = 4
     total_steps: int = 128
-    tau_rel: float = 0.65           # SPREAD anchor threshold (harness, ablated)
+    closure_steps: int | None = None
+    control_sweeps: int = 4         # max denoise sweeps spent on control fields per call
+    tau_rel: float = 0.65           # legacy raw-Rel threshold kept only for ablations
+    anchor_keep_frac: float = 0.60  # keep top relevance anchors; remask the rest
     tau_done: float = 0.85
     salient_words: int = 8
     rsd_tighten: float = 0.05
+    degenerate_repeat_frac: float = 0.7
+    degenerate_min_answer_tokens: int = 12
+    degenerate_min_cycles: int = 2
 
 
 @dataclass

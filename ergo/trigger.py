@@ -9,6 +9,9 @@ Firing rules:
   primary  — conformal: p-value against null-span calibration scores <= alpha_fire
              (distribution-free false-fire control; no lambda hyperparameter)
   fallback — outlier rule: max_S G(S) > mu_G + lambda_G * sigma_G
+             note: with only a few spans (common on short answers), this can be
+             structurally hard to exceed; calibrated conformal triggering is the
+             intended primary rule once >=20 null scores are available.
 """
 from __future__ import annotations
 
@@ -59,10 +62,18 @@ class ConformalCalibrator:
         return float((1 + int((arr >= score).sum())) / (len(arr) + 1))
 
 
-def _segment_spans(snapshot: Snapshot, tokens: list[str], min_len: int) -> list[np.ndarray]:
-    pos = snapshot.canvas.field_positions("answer")
+def _segment_spans(snapshot: Snapshot, tokens: list[str], min_len: int, non_content_ids: set[int]) -> list[np.ndarray]:
+    pos = list(snapshot.canvas.field_positions("answer"))
+    ids = snapshot.predicted_ids
+    while pos and (ids[pos[-1]] in non_content_ids or ids[pos[-1]] == snapshot.canvas.mask_id):
+        pos.pop()
     spans, cur = [], []
     for p in pos:
+        if ids[p] in non_content_ids or ids[p] == snapshot.canvas.mask_id:
+            if len(cur) >= min_len:
+                spans.append(np.array(cur))
+            cur = []
+            continue
         tok = tokens[p].lower().strip("Ġ▁#")
         cur.append(p)
         if tok in _BOUNDARY_TOKENS or any(tok.endswith(b) for b in (".", ",", ";", "?", "!")):
@@ -78,7 +89,8 @@ def gap_scores(snapshot: Snapshot, tok, cfg: TriggerConfig) -> list[GapSpan]:
     tokens = tok.tokens(snapshot.predicted_ids.tolist())
     u = 0.5 * (snapshot.entropy + snapshot.margin)
     out = []
-    for span in _segment_spans(snapshot, tokens, cfg.min_span_tokens):
+    non_content_ids = set(getattr(tok, "non_content_ids", set())) | set(getattr(tok, "special_ids", set()))
+    for span in _segment_spans(snapshot, tokens, cfg.min_span_tokens, non_content_ids):
         conf = snapshot.confidence[span]
         med = np.median(conf)
         frame = span[conf >= med]

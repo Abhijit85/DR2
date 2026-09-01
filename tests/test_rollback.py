@@ -40,16 +40,15 @@ def test_contradicted_token_rolls_back():
     pos = _commit_answer(cv, tok, ["elsa", "einstein", "born"], prob=0.9)
     conf = np.full(len(cv.ids), 0.9)
     rel = np.full(len(cv.ids), 0.9)
-    conf[pos[0]] = 0.01                      # evidence crushed p' for 'elsa'
-    report = rollback_pass(cv, _snapshot_with(cv, conf, rel),
-                           RollbackConfig(alpha_roll=0.135), tau_rel=0.5)
+    conf[pos[0]] = 0.01
+    report = rollback_pass(cv, _snapshot_with(cv, np.full(len(cv.ids), 0.9), rel), _snapshot_with(cv, conf, rel),
+                           RollbackConfig(alpha_roll=0.135), )
     assert report.n_rolled == 1
-    assert cv.ids[pos[0]] == tok.mask_id     # cleared to MASK
-    assert cv.ids[pos[1]] != tok.mask_id     # supported tokens survive
+    assert cv.ids[pos[0]] == tok.mask_id
+    assert cv.ids[pos[1]] != tok.mask_id
 
 
 def test_llr_threshold_boundary():
-    """Token survives iff log p' >= log pi - delta (strict inequality rule)."""
     from ergo.rollback import rollback_pass
     tok = SimpleTokenizer()
     delta = RollbackConfig(alpha_roll=0.135).delta
@@ -59,22 +58,11 @@ def test_llr_threshold_boundary():
         conf = np.full(len(cv.ids), 0.9)
         rel = np.full(len(cv.ids), 0.9)
         conf[pos[0]] = 0.8 * math.exp(-(delta - eps))
-        report = rollback_pass(cv, _snapshot_with(cv, conf, rel),
-                               RollbackConfig(alpha_roll=0.135), tau_rel=0.0)
+        before_conf = np.full(len(cv.ids), 0.9)
+        before_conf[pos[0]] = 0.8
+        report = rollback_pass(cv, _snapshot_with(cv, before_conf, rel), _snapshot_with(cv, conf, rel),
+                               RollbackConfig(alpha_roll=0.135), )
         assert (report.n_rolled == 1) == expect_roll
-
-
-def test_low_relevance_rolls_back_even_if_confident():
-    from ergo.rollback import rollback_pass
-    tok = SimpleTokenizer()
-    cv = _small_canvas(tok)
-    pos = _commit_answer(cv, tok, ["drifted", "phrase"], prob=0.95)
-    conf = np.full(len(cv.ids), 0.95)
-    rel = np.full(len(cv.ids), 0.9)
-    rel[pos] = 0.2                            # SPREAD: low relevance -> re-mask
-    report = rollback_pass(cv, _snapshot_with(cv, conf, rel),
-                           RollbackConfig(), tau_rel=0.65)
-    assert report.n_rolled == 2
 
 
 def test_cap_limits_rollback_to_worst_offenders():
@@ -85,9 +73,37 @@ def test_cap_limits_rollback_to_worst_offenders():
     pos = _commit_answer(cv, tok, words, prob=0.9)
     conf = np.full(len(cv.ids), 0.9)
     rel = np.full(len(cv.ids), 0.9)
-    conf[pos] = np.linspace(0.001, 0.02, len(pos))   # all fail the LRT
-    cfg = RollbackConfig(cap_fraction=0.25)          # cap: 2 of 8
-    report = rollback_pass(cv, _snapshot_with(cv, conf, rel), cfg, tau_rel=0.0)
+    conf[pos] = np.linspace(0.001, 0.02, len(pos))
+    cfg = RollbackConfig(cap_fraction=0.25)
+    report = rollback_pass(cv, _snapshot_with(cv, np.full(len(cv.ids), 0.9), rel), _snapshot_with(cv, conf, rel), cfg, )
     assert report.capped and report.n_rolled == 2
-    # the two lowest-p' positions were the ones cleared
     assert set(report.positions) == set(pos[:2])
+
+
+def test_non_content_positions_do_not_affect_lrt_rollback():
+    from ergo.rollback import rollback_pass
+    tok = SimpleTokenizer()
+    cv = _small_canvas(tok)
+    pos = cv.field_positions("answer")[:4]
+    cv.commit(pos, np.array([tok.pad_id, tok.pad_id, tok.encode("real")[0], tok.encode("text")[0]]), np.full(4, 0.9))
+    conf = np.full(len(cv.ids), 0.95)
+    rel = np.full(len(cv.ids), 0.2)
+    report = rollback_pass(cv, _snapshot_with(cv, conf, rel), _snapshot_with(cv, conf, rel), RollbackConfig(),
+                           exempt_positions=pos[:2])
+    assert report.n_rolled == 0
+    assert cv.ids[pos[2]] != tok.mask_id
+    assert cv.ids[pos[3]] != tok.mask_id
+
+
+def test_contradicted_positions_still_rollback_without_lrt_failure():
+    from ergo.rollback import rollback_pass
+    tok = SimpleTokenizer()
+    cv = _small_canvas(tok)
+    pos = _commit_answer(cv, tok, ["w0", "w1", "w2"], prob=0.95)
+    conf = np.full(len(cv.ids), 0.95)
+    rel = np.full(len(cv.ids), 0.1)
+    report = rollback_pass(cv, _snapshot_with(cv, conf, rel), _snapshot_with(cv, conf, rel), RollbackConfig(),
+                           contradicted_positions=np.array([pos[1]]))
+    assert report.n_rolled == 1
+    assert report.n_contradicted == 1
+    assert cv.ids[pos[1]] == tok.mask_id

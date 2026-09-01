@@ -46,7 +46,7 @@ def salient_words(
     idf: dict[str, float],
     top_m: int,
     exclude: set[str] | None = None,
-    fields: tuple[str, ...] = ("thought", "action_input", "answer"),
+    fields: tuple[str, ...] = ("thought", "action_input"),
 ) -> list[str]:
     exclude = {w.lower() for w in (exclude or set())}
     default_idf = float(np.median(list(idf.values()))) if idf else 1.0

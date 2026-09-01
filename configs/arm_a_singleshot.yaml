@@ -1,0 +1,11 @@
+rollback:
+  cap_fraction: 0.0
+trigger:
+  use_conformal: false
+  lambda_g: 1000000.0
+loop:
+  c_max: 1
+retrieval:
+  alpha: 1.0
+  beta: 0.0
+  k: 5

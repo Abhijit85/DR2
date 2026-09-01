@@ -1,0 +1,15 @@
+model_name: pauljngr/sardi-dream-7b
+train_file: artifacts/ergo_sft/hotpot_ergo_sft_train.jsonl
+output_dir: artifacts/ergo_sft/ergo_dream_lora_hotpot
+max_length: 2048
+mask_fraction: 0.10
+per_device_batch_size: 1
+gradient_accumulation_steps: 16
+learning_rate: 1e-5
+num_train_epochs: 1.0
+max_steps: 500
+logging_steps: 10
+save_steps: 100
+warmup_ratio: 0.03
+max_grad_norm: 1.0
+seed: 0

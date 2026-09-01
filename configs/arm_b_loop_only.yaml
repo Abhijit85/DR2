@@ -1,0 +1,5 @@
+rollback:
+  cap_fraction: 0.0
+trigger:
+  use_conformal: false
+  lambda_g: 1000000.0

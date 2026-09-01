@@ -11,6 +11,10 @@ from typing import Protocol, Sequence
 class TokenizerLike(Protocol):
     mask_id: int
     pad_id: int
+    eos_id: int | None
+    special_ids: set[int]
+    non_content_ids: set[int]
+    continuation_ids: set[int]
 
     def encode(self, text: str) -> list[int]: ...
     def decode(self, ids: Sequence[int], skip_special: bool = True) -> str: ...
@@ -28,6 +32,10 @@ class SimpleTokenizer:
         self._id2tok: list[str] = ["<pad>", "<mask>"]
         self.pad_id = 0
         self.mask_id = 1
+        self.eos_id = None
+        self.special_ids = {self.pad_id, self.mask_id}
+        self.non_content_ids = {self.pad_id}
+        self.continuation_ids = set()
 
     def _add(self, tok: str) -> int:
         if tok not in self._tok2id:
@@ -68,6 +76,25 @@ class HFTokenizerWrapper:
             raise ValueError("mask token id required (pass mask_id explicitly for LLaDA: 126336)")
         self.mask_id = int(mid)
         self.pad_id = int(hf_tokenizer.pad_token_id or 0)
+        eos = getattr(hf_tokenizer, "eos_token_id", None)
+        self.eos_id = int(eos) if eos is not None else None
+        self.special_ids = {int(i) for i in getattr(hf_tokenizer, "all_special_ids", [])}
+        self.special_ids.add(self.mask_id)
+        self.special_ids.add(self.pad_id)
+        if self.eos_id is not None:
+            self.special_ids.add(self.eos_id)
+        self.non_content_ids = {self.pad_id}
+        if self.eos_id is not None:
+            self.non_content_ids.add(self.eos_id)
+        vocab = self.hf.get_vocab()
+        self.continuation_ids = {
+            int(idx) for tok, idx in vocab.items()
+            if idx not in self.special_ids
+            and tok
+            and not tok.startswith(("Ġ", "▁", "<", "["))
+            and not tok[0].isspace()
+            and tok[0].isalnum()
+        }
 
     def encode(self, text: str) -> list[int]:
         return self.hf.encode(text, add_special_tokens=False)
@@ -81,11 +108,11 @@ class HFTokenizerWrapper:
 
     def is_word_start(self, ids, position: int) -> bool:
         tok = self.hf.convert_ids_to_tokens([ids[position]])[0]
-        if tok.startswith("##"):          # WordPiece continuation
+        if tok.startswith("##"):
             return False
-        if tok.startswith(("Ġ", "▁")):   # BPE / SentencePiece word starts
+        if tok.startswith(("Ġ", "▁")):
             return True
-        return position == 0  # BPE continuation pieces lack the space marker
+        return position == 0
 
     @property
     def vocab_size(self) -> int:

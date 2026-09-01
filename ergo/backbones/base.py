@@ -1,8 +1,9 @@
-"""Backbone protocol + SPREAD relevance-guided selection (design doc §2.1, §3.1).
+"""Backbone protocol + SPREAD/CAP reveal policies (design doc §2.1, §3.1).
 
-``spread_select`` is the shared reveal policy used by every backbone (mock and
-HF adapters): commit the top-k masked positions ranked by Rel(i,q) =
-sigmoid(cos(h_i, h_q)), never by raw confidence.
+``spread_select`` preserves the original relevance-ranked reveal order. The
+manual answer decoder now composes that order with a confidence gate so low-
+confidence masked positions are not committed in bulk from independent
+marginals.
 """
 from __future__ import annotations
 
@@ -57,11 +58,18 @@ class DiffusionBackbone(Protocol):
 
 
 # --------------------------------------------------------------------- SPREAD
-def relevance_scores(hidden: np.ndarray, h_q: np.ndarray) -> np.ndarray:
-    """Rel(i,q) = sigmoid(cos(h_i, h_q)). hidden: (L, d); h_q: (d,)."""
+def relevance_scores(hidden: np.ndarray, h_q: np.ndarray, *, standardize: bool = True) -> np.ndarray:
+    """Rel(i,q) from cosine similarity, optionally standardized per canvas.
+
+    ``standardize=True`` preserves ordering (monotone transform after z-scoring)
+    while making thresholded uses such as ``tau_rel`` meaningful within each
+    canvas. ``False`` keeps the original ``sigmoid(cos)`` scale for ablations.
+    """
     hn = hidden / (np.linalg.norm(hidden, axis=-1, keepdims=True) + 1e-9)
     qn = h_q / (np.linalg.norm(h_q) + 1e-9)
     sim = hn @ qn
+    if standardize:
+        sim = (sim - sim.mean()) / (sim.std() + 1e-6)
     return 1.0 / (1.0 + np.exp(-sim))
 
 
@@ -104,6 +112,44 @@ def spread_select(
     noise = (rng.random(len(idx)) if rng is not None else np.zeros(len(idx))) * 1e-6
     order = np.argsort(-(rel[idx] + noise))
     return idx[order[: min(k, len(idx))]]
+
+
+def cap_select(
+    canvas: Canvas,
+    probs: np.ndarray,          # (L, V) predictive distributions this step
+    rel: np.ndarray,            # (L,) Rel(i, q)
+    k: int,
+    tau: float,
+    restrict: Sequence[str] | None = None,
+    rng: np.random.Generator | None = None,
+) -> np.ndarray:
+    """Confidence-gated SPREAD selection.
+
+    Parallel commits are allowed only for masked positions whose argmax
+    confidence clears ``tau``. Those eligible positions are still ranked by
+    relevance, preserving SPREAD ordering. If nothing is above threshold, we
+    commit exactly one best masked position to avoid bulk low-confidence
+    collapse.
+    """
+    mask = canvas.ids == canvas.mask_id
+    if restrict is not None:
+        allowed = np.zeros_like(mask)
+        for f in restrict:
+            allowed[canvas.spans[f]] = True
+        mask = mask & allowed
+    idx = np.nonzero(mask)[0]
+    if len(idx) == 0 or k <= 0:
+        return idx[:0]
+    conf = probs[idx].max(axis=-1)
+    noise = (rng.random(len(idx)) if rng is not None else np.zeros(len(idx))) * 1e-6
+    eligible = conf >= tau
+    if np.any(eligible):
+        gated = idx[eligible]
+        gated_noise = noise[eligible]
+        order = np.argsort(-(rel[gated] + gated_noise))
+        return gated[order[: min(k, len(gated))]]
+    score = rel[idx] + 1e-3 * conf + noise
+    return idx[np.array([int(np.argmax(score))], dtype=np.int64)]
 
 
 def linear_step_budget(num_masked: int, steps_remaining: int) -> int:
